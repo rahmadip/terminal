@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Coki Terminal</title>
+  <style>
+    body                  {background: #000; color: #0f0; font-family: monospace; font-size: 16px; padding: 1rem; margin: 0;}
+    #terminal             {white-space: pre-wrap; outline: none;}
+    .line                 {display: flex;}
+    .prompt               {white-space: nowrap;}
+    .prompt span.username {color: #0f0;}
+    .prompt span.host     {color: #0f0;}
+    input                 {background: transparent; border: none; color: #0f0; font: inherit; flex: 1; outline: none;}
+    .response             {margin: 0.5rem 0; color: #ffd000;}
+    .progress-bar         {color: cyan;}
+  </style>
+</head>
+<body>
+  <div id="terminal" tabindex="0">
+    <div class="line">
+      <span class="prompt"><span class="username">guest</span><span class="host">@login:~$ </span></span>
+      <input type="password" autofocus>
+    </div>
+  </div>
+
+  <script>
+    const terminal = document.getElementById("terminal");
+
+    const downloadMap = {
+      mni_logo: {
+        name: "Icon Logo MNI PNG Color",
+        url: "https://drive.google.com/uc?export=download&id=1gyI82uvwuWK91iGSIqe4kwbhz6SJ3DEm"
+      },
+      mainlogomnipngcolor: {
+        name: "Main Logo MNI PNG Color",
+        url: "https://drive.google.com/uc?export=download&id=1vkNB4FBwdwAKd7p5xHV6aRr4ma12O_M7"
+      },
+      alternativelogomnipngcolor: {
+        name: "Alternative Logo MNI PNG Color",
+        url: "https://drive.google.com/uc?export=download&id=1MIlci9WHUjeai1ixwvCmCDx7eaweD9iv"
+      }
+    };
+
+    let state = {
+      mode: "login",
+      prompt: {
+        username: "guest",
+        host: "login"
+      }
+    };
+
+    function getPromptHTML() {
+      return `<span class="username">${state.prompt.username}</span><span class="host">@${state.prompt.host}:~$ </span>`;
+    }
+
+    function appendLine(content, className = "response") {
+      const div = document.createElement("div");
+      div.className = className;
+      div.textContent = content;
+      terminal.appendChild(div);
+    }
+
+    function createInputLine() {
+      const line = document.createElement("div");
+      line.className = "line";
+      const promptSpan = document.createElement("span");
+      promptSpan.className = "prompt";
+      promptSpan.innerHTML = getPromptHTML();
+      const input = document.createElement("input");
+      if (state.mode === "login") input.type = "password";
+      line.appendChild(promptSpan);
+      line.appendChild(input);
+      terminal.appendChild(line);
+      input.focus();
+    }
+
+    terminal.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        const input = e.target;
+        const value = input.value.trim();
+        input.disabled = true;
+
+        if (state.mode === "login") {
+          if (value === "103mercies") {
+            state.mode = "rahmadip";
+            state.prompt = { username: "admin", host: "rahmadip" };
+          } else if (value === "NawacitaTV2023") {
+            state.mode = "mni";
+            state.prompt = { username: "guest", host: "MNI" };
+          } else {
+            appendLine("User not found");
+          }
+          createInputLine();
+          terminal.scrollTop = terminal.scrollHeight;
+          return;
+        }
+
+        // Global commands
+        if (value === "clear") {
+          terminal.innerHTML = "";
+          createInputLine();
+          return;
+        }
+
+        if (value === "logout") {
+          state.mode = "login";
+          state.prompt = { username: "guest", host: "login" };
+          appendLine("Logging out...");
+          createInputLine();
+          return;
+        }
+
+        if (value === "exit") {
+          appendLine("Closing tab...");
+          setTimeout(() => {
+            const closed = window.close();
+            if (!closed) {
+              appendLine("Unable to close tab (browser blocked).");
+            }
+          }, 500);
+          return;
+        }
+
+        // Rahmadip commands
+        if (state.mode === "rahmadip") {
+          if (value === "help") {
+            appendLine("Command list:\n- clear: clear screen\n- date: show current date\n- logout: back to login\n- exit: close tab");
+          } else if (value === "date") {
+            appendLine(new Date().toString());
+          } else {
+            appendLine(`Unknown command: ${value}`);
+          }
+        }
+
+        // MNI commands
+        if (state.mode === "mni") {
+          if (value === "help") {
+            appendLine("Command list:\n- clear: clear screen\n- list: show file list\n- download [code]: download file\n- logout: back to login\n- exit: close tab");
+          } else if (value === "list") {
+            let output = "file                                         code";
+            for (const code in downloadMap) {
+              const name = downloadMap[code].name;
+              const namePad = name.padEnd(45, " ");
+              output += `\n${namePad}${code}`;
+            }
+            appendLine(output);
+          } else if (value.toLowerCase().startsWith("download")) {
+            const parts = value.split(" ");
+            if (parts.length !== 2) {
+              appendLine("Invalid syntax. Use: download [code]");
+            } else {
+              const code = parts[1].toLowerCase();
+              const entry = downloadMap[code];
+              if (entry && entry.url) {
+                const progress = document.createElement("div");
+                progress.className = "progress-bar";
+                progress.textContent = `Downloading ${code}: [-----     ] 50%`;
+                terminal.appendChild(progress);
+
+                setTimeout(() => {
+                  progress.textContent = `Downloading ${code}: [##########] 100%`;
+                }, 500);
+
+                const a = document.createElement("a");
+                a.href = entry.url;
+                a.download = code + ".png";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                setTimeout(() => {
+                  appendLine("Download initiated.");
+                }, 600);
+              } else {
+                appendLine(`Code not found: ${code}`);
+              }
+            }
+          } else {
+            appendLine(`Unknown command: ${value}`);
+          }
+        }
+
+        createInputLine();
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+    });
+
+    window.onload = () => {
+      terminal.querySelector("input").focus();
+    };
+  </script>
+</body>
+</html>
