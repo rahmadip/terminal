@@ -2,17 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Coki Terminal</title>
+  <title>Terminal</title>
   <style>
-    body                  {background: #000; color: #0f0; font-family: monospace; font-size: 16px; padding: 1rem; margin: 0;}
-    #terminal             {white-space: pre-wrap; outline: none;}
-    .line                 {display: flex;}
-    .prompt               {white-space: nowrap;}
-    .prompt span.username {color: #0f0;}
-    .prompt span.host     {color: #0f0;}
-    input                 {background: transparent; border: none; color: #0f0; font: inherit; flex: 1; outline: none;}
-    .response             {margin: 0.5rem 0; color: #ffd000;}
-    .progress-bar         {color: cyan;}
+    body {
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 16px;
+      padding: 1rem;
+      margin: 0;
+    }
+    #terminal {
+      white-space: pre-wrap;
+      outline: none;
+    }
+    .line {
+      display: flex;
+    }
+    .prompt {
+      white-space: nowrap;
+    }
+    .prompt span.username {
+      color: #0f0;
+    }
+    .prompt span.host {
+      color: #0f0;
+    }
+    input {
+      background: transparent;
+      border: none;
+      color: #0f0;
+      font: inherit;
+      flex: 1;
+      outline: none;
+    }
+    .response {
+      margin: 0.5rem 0;
+      color: #ffd700;
+    }
+    .progress-bar {
+      color: cyan;
+    }
   </style>
 </head>
 <body>
@@ -25,21 +55,8 @@
 
   <script>
     const terminal = document.getElementById("terminal");
-
-    const downloadMap = {
-      mni_logo: {
-        name: "Icon Logo MNI PNG Color",
-        url: "https://drive.google.com/uc?export=download&id=1gyI82uvwuWK91iGSIqe4kwbhz6SJ3DEm"
-      },
-      mainlogomnipngcolor: {
-        name: "Main Logo MNI PNG Color",
-        url: "https://drive.google.com/uc?export=download&id=1vkNB4FBwdwAKd7p5xHV6aRr4ma12O_M7"
-      },
-      alternativelogomnipngcolor: {
-        name: "Alternative Logo MNI PNG Color",
-        url: "https://drive.google.com/uc?export=download&id=1MIlci9WHUjeai1ixwvCmCDx7eaweD9iv"
-      }
-    };
+    const SHEET_URL = "https://opensheet.elk.sh/1xe9lDtzQQsMtPUup3Ey7brvx9ROoce7wM_LUPaG4boo/Sheet1";
+    let downloadMap = {};
 
     let state = {
       mode: "login",
@@ -74,11 +91,32 @@
       input.focus();
     }
 
-    terminal.addEventListener("keydown", function (e) {
+    async function fetchDownloadMap() {
+      try {
+        const res = await fetch(SHEET_URL);
+        const data = await res.json();
+        downloadMap = {};
+        data.forEach(entry => {
+          if (entry.Code && entry.URL) {
+            downloadMap[entry.Code] = {
+              name: entry.File || entry.Name || "(No Name)",
+              url: entry.URL
+            };
+          }
+        });
+      } catch (e) {
+        appendLine("Failed to load file list from Google Sheets.");
+      }
+    }
+
+    terminal.addEventListener("keydown", async function (e) {
       if (e.key === "Enter") {
         const input = e.target;
         const value = input.value.trim();
         input.disabled = true;
+
+        const suggestDiv = document.getElementById("suggestion-box");
+        if (suggestDiv) suggestDiv.remove();
 
         if (state.mode === "login") {
           if (value === "103mercies") {
@@ -87,6 +125,7 @@
           } else if (value === "NawacitaTV2023") {
             state.mode = "mni";
             state.prompt = { username: "guest", host: "MNI" };
+            await fetchDownloadMap();
           } else {
             appendLine("User not found");
           }
@@ -95,7 +134,6 @@
           return;
         }
 
-        // Global commands
         if (value === "clear") {
           terminal.innerHTML = "";
           createInputLine();
@@ -121,7 +159,6 @@
           return;
         }
 
-        // Rahmadip commands
         if (state.mode === "rahmadip") {
           if (value === "help") {
             appendLine("Command list:\n- clear: clear screen\n- date: show current date\n- logout: back to login\n- exit: close tab");
@@ -132,24 +169,27 @@
           }
         }
 
-        // MNI commands
         if (state.mode === "mni") {
           if (value === "help") {
             appendLine("Command list:\n- clear: clear screen\n- list: show file list\n- download [code]: download file\n- logout: back to login\n- exit: close tab");
           } else if (value === "list") {
-            let output = "file                                         code";
-            for (const code in downloadMap) {
-              const name = downloadMap[code].name;
-              const namePad = name.padEnd(45, " ");
-              output += `\n${namePad}${code}`;
+            if (Object.keys(downloadMap).length === 0) {
+              appendLine("No data found.");
+            } else {
+              let output = "file                                            code";
+              for (const code in downloadMap) {
+                const name = downloadMap[code].name;
+                const namePad = name.padEnd(45, " ");
+                output += `\n${namePad}${code}`;
+              }
+              appendLine(output);
             }
-            appendLine(output);
-          } else if (value.toLowerCase().startsWith("download")) {
+          } else if (value.startsWith("download ")) {
             const parts = value.split(" ");
             if (parts.length !== 2) {
               appendLine("Invalid syntax. Use: download [code]");
             } else {
-              const code = parts[1].toLowerCase();
+              const code = parts[1];
               const entry = downloadMap[code];
               if (entry && entry.url) {
                 const progress = document.createElement("div");
@@ -182,6 +222,30 @@
 
         createInputLine();
         terminal.scrollTop = terminal.scrollHeight;
+      }
+    });
+
+    // Auto-suggest feature
+    terminal.addEventListener("input", function (e) {
+      const input = e.target;
+      if (!input || !input.value || state.mode !== "mni") return;
+
+      const val = input.value.trim();
+      const existing = document.getElementById("suggestion-box");
+      if (existing) existing.remove();
+
+      if (val.startsWith("download ")) {
+        const query = val.slice(9);
+        const matches = Object.keys(downloadMap).filter(code => code.startsWith(query));
+        if (query.length > 0 && matches.length > 0) {
+          const suggest = document.createElement("div");
+          suggest.id = "suggestion-box";
+          suggest.className = "response";
+          suggest.style.color = "#00cccc";
+          suggest.textContent = "Suggestions: " + matches.join("   ");
+          terminal.appendChild(suggest);
+          terminal.scrollTop = terminal.scrollHeight;
+        }
       }
     });
 
